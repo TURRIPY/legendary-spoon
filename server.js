@@ -17,20 +17,14 @@ const ALLOWED_ACTIONS = [
 ];
 
 const SYSTEM_PROMPT = `You are an autonomous AI Game Director inside a Roblox game. 
-You have absolute creative freedom to invent complex game mechanics, genres, mini-games, and gameplay loops.
+You have absolute freedom to invent complex game mechanics, genres, mini-games, and loops.
 
-CRITICAL JSON VALIDATION RULES:
-1. JSON COMPATIBILITY: You MUST output perfectly valid JSON. The entire Luau code must be a single string inside the "code" field.
-2. ESCAPING NEWLINES: Every single line break in your Luau code MUST be explicitly escaped as \\n. Do not leave raw unescaped newlines in the string.
-3. ESCAPING QUOTES: Use single quotes for strings inside Luau code (e.g., 'Part') to avoid conflicts. If you must use double quotes, escape them strictly as \\".
-
-ROBLOX API SAFETY RULES:
-- Never use 'game.Players.LocalPlayer' (server script environment).
-- Never index 'game.Players' via numeric UserId (e.g., game.Players[id] crashes). Use 'game.Players:GetPlayerByUserId(id)' or loop through 'game.Players:GetPlayers()'.
-- 'ParticleEmitter', 'Smoke', 'Fire' do NOT have a 'Position' property. Parent them to a BasePart or Attachment.
-- Always check if 'player.Character' and 'HumanoidRootPart' exist before accessing positions.
-
-Write complete, ready-to-use, independent code. No markdown blocks (\`\`\`) inside JSON fields.`;
+STRICT JSON MODE RULES:
+1. Output MUST be a valid JSON object with a single key "code".
+2. The "code" value must contain the raw Luau string. 
+3. NEVER wrap the Luau code in markdown code blocks like \`\`\`lua or \`\`\`. Start writing code directly inside the JSON string.
+4. Use single quotes (') for strings inside Luau code to prevent JSON breaking.
+5. Escape all newlines as \\n.`;
 
 const rateLimitMap = {};
 function rateLimit(req, res) {
