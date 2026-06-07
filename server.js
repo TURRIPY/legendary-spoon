@@ -10,18 +10,16 @@ const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const SYSTEM_PROMPT = `You are an autonomous AI Game Director inside a Roblox game. 
 You have absolute freedom to invent complex game mechanics, genres, mini-games, and loops.
 
-STRICT JSON MODE RULES:
-1. Output MUST be a valid JSON object with a single key "code".
-2. The "code" value must contain the raw Luau string. 
-3. NEVER wrap the Luau code in markdown code blocks like \`\`\`lua or \`\`\`. Start writing code directly inside the JSON string.
-4. Use single quotes (') for strings inside Luau code to prevent JSON breaking.
-5. Escape all newlines as \\n.
+CRITICAL PERFORMANCE & API RULES:
+1. RUNSERVICE BAN: NEVER use 'RunService.RenderStepped', 'Heartbeat', or 'Stepped' to create new instances (Instance.new) or loop heavy logic. It crashes the engine. Use 'task.spawn(function() while true do task.wait(5) ... end end)' for periodic logic.
+2. LIGHTING: There is no 'LightEmission' instance in Roblox. Use 'PointLight' or manipulate 'game.Lighting.ClockTime' directly for day/night shifts.
+3. ENVIRONMENT: You run on the SERVER. 'RenderStepped' and 'game.Players.LocalPlayer' do not exist here (they return nil).
+4. PLAYER INDEXING: Never index 'game.Players' via numeric UserId (e.g., game.Players[id] crashes). Use 'game.Players:GetPlayerByUserId(id)' or loop through 'game.Players:GetPlayers()'.
 
-ROBLOX API SAFETY RULES:
-- Never use 'game.Players.LocalPlayer' (it is nil on the server).
-- Never index 'game.Players' via numeric UserId (e.g., game.Players[id] crashes). Use 'game.Players:GetPlayerByUserId(id)' or loop through 'game.Players:GetPlayers()'.
-- 'ParticleEmitter', 'Smoke', 'Fire' do NOT have a 'Position' property. Parent them to a BasePart or Attachment.
-- Always check if 'player.Character' and 'HumanoidRootPart' exist before accessing positions.`;
+STRICT JSON MODE RULES:
+- Output MUST be a valid JSON object with a single key "code": {"code": "your Luau code here"}
+- Use single quotes (') for strings inside Luau code to prevent JSON breaking.
+- Escape all newlines as \\n.`;
 
 const rateLimitMap = {};
 function rateLimit(req, res) {
@@ -54,12 +52,6 @@ function checkToken(req, res) {
     return true;
 }
 
-function validateAction(parsed) {
-    // Проверяем, что ИИ вернул JSON с ключом "code", и это строка
-    if (!parsed || typeof parsed.code !== "string" || parsed.code.trim() === "") return false;
-    return true;
-}
-
 app.post('/ai-command', async (req, res) => {
     if (!checkToken(req, res)) return;
     if (!rateLimit(req, res)) return;
@@ -75,7 +67,6 @@ app.post('/ai-command', async (req, res) => {
 
     console.log(`[AI-BRIDGE] prompt received: "${prompt}"`);
 
-    // Объединяем правила и контекст игры в один системный промпт, чтобы Groq не выдавал 502
     const combinedSystemPrompt = `${SYSTEM_PROMPT}\n\n${gameContextString}`;
 
     try {
@@ -112,12 +103,20 @@ app.post('/ai-command', async (req, res) => {
             return res.status(502).json({ error: "Groq returned invalid JSON format", raw: rawText });
         }
 
-        if (!validateAction(parsed)) {
+        if (!parsed || typeof parsed.code !== "string" || parsed.code.trim() === "") {
             return res.status(422).json({ error: "Action failed validation", raw: parsed });
         }
 
-        // Возвращаем Roblox структуру вида {"code": "while true do ..."}
-        return res.json(parsed);
+        // Автоматически упаковываем в формат, который ждет твой скрипт в Roblox
+        const robloxResponse = {
+            action: "executeCode",
+            params: {
+                code: parsed.code
+            }
+        };
+
+        console.log(`[AI-BRIDGE] successfully generated and formatted code structure.`);
+        return res.json(robloxResponse);
 
     } catch (err) {
         console.error("[AI-BRIDGE] Error during Groq request:", err);
