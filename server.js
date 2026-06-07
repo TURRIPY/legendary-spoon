@@ -3,9 +3,10 @@ const app = express();
 app.use(express.json());
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GROQ_API_KEY   = process.env.GROQ_API_KEY;
 const ACCESS_TOKEN   = process.env.AI_BRIDGE_TOKEN || "changeme";
 
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 // whitelist of actions the AI is allowed to call
 const ALLOWED_ACTIONS = [
@@ -119,37 +120,32 @@ app.post('/ai-command', async (req, res) => {
     console.log(`[AI-BRIDGE] prompt received: "${prompt}"`);
 
     try {
-        const response = await fetch(GEMINI_URL, {
+        const response = await fetch(GROQ_URL, {
             method: "POST",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type":  "application/json",
+                "Authorization": `Bearer ${GROQ_API_KEY}`
             },
             body: JSON.stringify({
-                system_instruction: {
-                    parts: [{ text: SYSTEM_PROMPT }]
-                },
-                contents: [
-                    {
-                        role: "user",
-                        parts: [{ text: prompt }]
-                    }
-                ],
-                generationConfig: {
-                    maxOutputTokens: 150,
-                    temperature: 0.7,
-                    responseMimeType: "application/json"
-                }
+                model:       "llama-3.1-8b-instant",
+                max_tokens:  150,
+                temperature: 0.7,
+                messages: [
+                    { role: "system", content: SYSTEM_PROMPT },
+                    { role: "user",   content: prompt }
+                ]
             })
         });
 
         const data = await response.json();
 
-        if (!data.candidates || !data.candidates[0]) {
-            console.warn("[AI-BRIDGE] no candidates in Gemini response:", JSON.stringify(data));
-            return res.status(502).json({ error: "No response from Gemini" });
+        if (!data.choices || !data.choices[0]) {
+            console.warn("[AI-BRIDGE] no choices in Groq response:", JSON.stringify(data));
+            const reason = data.error?.message || "unknown";
+            return res.status(502).json({ error: "No response from Groq", reason });
         }
 
-        const rawText = data.candidates[0].content.parts[0].text.trim();
+        const rawText = data.choices[0].message.content.trim();
         console.log(`[AI-BRIDGE] raw AI response: ${rawText}`);
 
         let parsed;
