@@ -25,8 +25,12 @@ You must ALWAYS respond with a single valid JSON object matching this exact sche
   }
 }
 
-Available actions: "spawnObject", "changeWeather", "setGlobalMessage", "moveObject", "changeColor", "executeCode", "none".
-If you write custom scripts, put the raw Luau code strictly inside the "code" parameter string.`;
+CRITICAL RULES FOR WRITING LUAU CODE:
+1. You are running on the SERVER. Never use 'game.Players.LocalPlayer'. To affect players, loop through 'game.Players:GetPlayers()'.
+2. EVERY 'while true do' or 'while task.wait() do' loop MUST contain 'task.wait(1)' or longer inside to prevent freezing the server.
+3. Do not leave placeholder comments like '-- replace with your ID'. Use real data or standard assets (e.g., sound ID 'rbxassetid://9114223129' otherwise, do not use sounds or assets at all (you actually dont have access to real assets, so u have nothing to do with that, sorry!). ).
+4. Keep scripts brief, functional, and self-contained.
+5. If you want to manipulate objects (move, change color, scale), ALWAYS create them first using 'Instance.new("Part")' and parent them to Workspace. Do not assume objects named "Object" or "Sword" already exist.`;
 
 const rateLimitMap = {};
 function rateLimit(req, res) {
