@@ -2,42 +2,37 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GROQ_API_KEY   = process.env.GROQ_API_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const ACCESS_TOKEN   = process.env.AI_BRIDGE_TOKEN || "changeme";
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-// whitelist of actions the AI is allowed to call
 const ALLOWED_ACTIONS = [
     "spawnObject",
     "changeWeather",
     "setGlobalMessage",
     "moveObject",
-    "changeColor"
+    "changeColor",
+    "executeCode"
 ];
 
-// system prompt that locks the AI to only output JSON actions
-const SYSTEM_PROMPT = `You are an autonomous AI agent inside a Roblox game.
-Your ONLY job is to respond with a JSON object that describes ONE action to perform.
-You have access to these functions only:
-- spawnObject(shape, x, y, z)         — shapes: "Block", "Sphere", "Cylinder"
-- changeWeather(type)                  — types: "sunny", "rainy", "stormy"
-- setGlobalMessage(text)               — text: short message shown to all players (max 80 chars)
-- moveObject(name, x, y, z)           — moves an existing object by name
-- changeColor(name, r, g, b)          — changes color of an existing object (0-255)
+const SYSTEM_PROMPT = `You are a fully autonomous, creative AI overseer inside a Roblox game with FULL access to the Roblox API (game, workspace, Players, etc.).
+Your job is to independently decide how to modify the game world, invent new mechanics, or surprise players. You must think for yourself.
+If you decide to create a new game mechanic, script, trap, or complex visual effect, you MUST use the "executeCode" action and write the entire Luau script yourself from scratch.
+
+Available actions:
+- spawnObject(shape, x, y, z) — shapes: "Block", "Sphere", "Cylinder"
+- changeWeather(type) — types: "sunny", "rainy", "stormy"
+- setGlobalMessage(text) — text: short message shown to all players (max 80 chars)
+- moveObject(name, x, y, z) — moves an existing object by name
+- changeColor(name, r, g, b) — changes color of an existing object (0-255)
+- executeCode(code) — Generates and executes custom Luau code. Use this to dynamically build any scripts, loops, or systems you think of.
 
 RULES:
-- Respond ONLY with valid JSON, nothing else.
-- Format: { "action": "<name>", "params": { ... } }
-- Never use any action not in the list above.
-- Keep messages friendly and under 80 characters.
-- If you cannot determine a valid action, respond: { "action": "none", "params": {} }
+- Respond ONLY with valid JSON: { "action": "<name>", "params": { ... } }
+- Do not include markdown, backticks, or any text outside the JSON structure.
+- For "executeCode", write clean, functional Luau code inside the "code" parameter string.`;
 
-Example response:
-{ "action": "spawnObject", "params": { "shape": "Sphere", "x": 0, "y": 10, "z": 0 } }`;
-
-// rate limiting — 10 requests per minute per IP
 const rateLimitMap = {};
 function rateLimit(req, res) {
     const ip  = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.socket.remoteAddress || "unknown";
@@ -51,6 +46,7 @@ function rateLimit(req, res) {
     rateLimitMap[ip].push(now);
     return true;
 }
+
 setInterval(() => {
     const now = Date.now();
     for (const ip of Object.keys(rateLimitMap)) {
@@ -59,7 +55,6 @@ setInterval(() => {
     }
 }, 5 * 60 * 1000);
 
-// auth middleware
 function checkToken(req, res) {
     const token = req.headers["x-ai-token"];
     if (token !== ACCESS_TOKEN) {
@@ -69,7 +64,6 @@ function checkToken(req, res) {
     return true;
 }
 
-// validate that AI response is safe before passing to Roblox
 function validateAction(parsed) {
     if (!parsed || typeof parsed.action !== "string") return false;
     if (!ALLOWED_ACTIONS.includes(parsed.action) && parsed.action !== "none") return false;
@@ -81,33 +75,28 @@ function validateAction(parsed) {
         case "spawnObject":
             if (!["Block", "Sphere", "Cylinder"].includes(p.shape)) return false;
             if (typeof p.x !== "number" || typeof p.y !== "number" || typeof p.z !== "number") return false;
-            // clamp coordinates to safe range
-            if (Math.abs(p.x) > 500 || Math.abs(p.y) > 200 || Math.abs(p.z) > 500) return false;
             break;
         case "changeWeather":
             if (!["sunny", "rainy", "stormy"].includes(p.type)) return false;
             break;
         case "setGlobalMessage":
             if (typeof p.text !== "string" || p.text.length > 80) return false;
-            // strip any suspicious content
-            if (/<script|javascript:|eval\(|loadstring/i.test(p.text)) return false;
             break;
         case "moveObject":
-            if (typeof p.name !== "string" || p.name.length > 50) return false;
+            if (typeof p.name !== "string") return false;
             if (typeof p.x !== "number" || typeof p.y !== "number" || typeof p.z !== "number") return false;
-            if (Math.abs(p.x) > 500 || Math.abs(p.y) > 200 || Math.abs(p.z) > 500) return false;
             break;
         case "changeColor":
-            if (typeof p.name !== "string" || p.name.length > 50) return false;
-            if ([p.r, p.g, p.b].some(v => typeof v !== "number" || v < 0 || v > 255)) return false;
+            if (typeof p.name !== "string") return false;
+            if ([p.r, p.g, p.b].some(v => typeof v !== "number")) return false;
             break;
-        case "none":
+        case "executeCode":
+            if (typeof p.code !== "string") return false;
             break;
     }
     return true;
 }
 
-// main endpoint — Roblox sends a prompt, we ask OpenAI, validate, return action
 app.post('/ai-command', async (req, res) => {
     if (!checkToken(req, res)) return;
     if (!rateLimit(req, res)) return;
@@ -128,8 +117,8 @@ app.post('/ai-command', async (req, res) => {
             },
             body: JSON.stringify({
                 model:       "llama-3.1-8b-instant",
-                max_tokens:  150,
-                temperature: 0.7,
+                max_tokens:  2000,
+                temperature: 0.85,
                 messages: [
                     { role: "system", content: SYSTEM_PROMPT },
                     { role: "user",   content: prompt }
@@ -158,7 +147,7 @@ app.post('/ai-command', async (req, res) => {
 
         if (!validateAction(parsed)) {
             console.warn("[AI-BRIDGE] action failed validation:", parsed);
-            return res.status(422).json({ error: "Action failed safety validation", raw: parsed });
+            return res.status(422).json({ error: "Action failed validation", raw: parsed });
         }
 
         console.log(`[AI-BRIDGE] approved action: ${JSON.stringify(parsed)}`);
@@ -170,7 +159,7 @@ app.post('/ai-command', async (req, res) => {
     }
 });
 
-app.get('/', (_req, res) => res.send("AI Bridge is running."));
+app.get('/', (_req, res) => res.send("AI Bridge (Groq) is running."));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`AI Bridge listening on port ${PORT}`));
