@@ -7,18 +7,18 @@ const ACCESS_TOKEN   = process.env.AI_BRIDGE_TOKEN || "changeme";
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-const SYSTEM_PROMPT = `You are an autonomous AI Game Director inside a Roblox game. 
-You have absolute freedom to invent complex game mechanics, genres, mini-games, and loops.
+const SYSTEM_PROMPT = `You are an autonomous AI Game Director inside a Roblox game.
+You create full-fledged gameplay systems, mechanics, game loops, and logic.
 
-CRITICAL PERFORMANCE & API RULES:
-1. RUNSERVICE BAN: NEVER use 'RunService.RenderStepped', 'Heartbeat', or 'Stepped' to create new instances (Instance.new) or loop heavy logic. It crashes the engine. Use 'task.spawn(function() while true do task.wait(5) ... end end)' for periodic logic.
-2. LIGHTING: There is no 'LightEmission' instance in Roblox. Use 'PointLight' or manipulate 'game.Lighting.ClockTime' directly for day/night shifts.
-3. ENVIRONMENT: You run on the SERVER. 'RenderStepped' and 'game.Players.LocalPlayer' do not exist here (they return nil).
-4. PLAYER INDEXING: Never index 'game.Players' via numeric UserId (e.g., game.Players[id] crashes). Use 'game.Players:GetPlayerByUserId(id)' or loop through 'game.Players:GetPlayers()'.
+CRITICAL ROBLOX API RULES:
+1. DICTIONARIES: Never use the '#' operator to get the length of a dictionary (e.g., #weather where keys are strings). It returns 0. Use a numeric array or manually count keys.
+2. CHARACTER INITIALIZATION: Never access 'player.Character.HumanoidRootPart' directly. It might not be loaded yet. Always use 'player.Character:FindFirstChild("HumanoidRootPart")' or wait for it.
+3. ENVIRONMENT: You run on the SERVER. Never use 'game.Players.LocalPlayer'. Use 'game.Players:GetPlayers()' instead.
+4. LOOPS: Any 'while true do' loop MUST contain 'task.wait(1)' or longer. NEVER use 'RunService.RenderStepped' or 'Heartbeat' to run loops or spawn instances.
 
 STRICT JSON MODE RULES:
 - Output MUST be a valid JSON object with a single key "code": {"code": "your Luau code here"}
-- Use single quotes (') for strings inside Luau code to prevent JSON breaking.
+- Use single quotes (') for strings inside Luau code.
 - Escape all newlines as \\n.`;
 
 const rateLimitMap = {};
@@ -56,18 +56,12 @@ app.post('/ai-command', async (req, res) => {
     if (!checkToken(req, res)) return;
     if (!rateLimit(req, res)) return;
 
-    const { prompt, context } = req.body; 
+    const { prompt } = req.body; 
     if (!prompt || typeof prompt !== "string" || prompt.length > 500) {
         return res.status(400).json({ error: "Invalid prompt" });
     }
 
-    const gameContextString = context 
-        ? `CURRENT GAME STATE:\n${JSON.stringify(context, null, 2)}`
-        : "CURRENT GAME STATE: No data available.";
-
     console.log(`[AI-BRIDGE] prompt received: "${prompt}"`);
-
-    const combinedSystemPrompt = `${SYSTEM_PROMPT}\n\n${gameContextString}`;
 
     try {
         const response = await fetch(GROQ_URL, {
@@ -82,7 +76,7 @@ app.post('/ai-command', async (req, res) => {
                 temperature: 0.4,
                 response_format: { type: "json_object" },
                 messages: [
-                    { role: "system", content: combinedSystemPrompt },
+                    { role: "system", content: SYSTEM_PROMPT },
                     { role: "user",   content: prompt }
                 ]
             })
@@ -107,7 +101,6 @@ app.post('/ai-command', async (req, res) => {
             return res.status(422).json({ error: "Action failed validation", raw: parsed });
         }
 
-        // Автоматически упаковываем в формат, который ждет твой скрипт в Roblox
         const robloxResponse = {
             action: "executeCode",
             params: {
@@ -115,7 +108,7 @@ app.post('/ai-command', async (req, res) => {
             }
         };
 
-        console.log(`[AI-BRIDGE] successfully generated and formatted code structure.`);
+        console.log(`[AI-BRIDGE] successfully generated code.`);
         return res.json(robloxResponse);
 
     } catch (err) {
