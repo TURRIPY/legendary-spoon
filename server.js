@@ -16,22 +16,17 @@ const ALLOWED_ACTIONS = [
     "executeCode"
 ];
 
-const SYSTEM_PROMPT = `You are a fully autonomous, creative AI overseer inside a Roblox game with FULL access to the Roblox API (game, workspace, Players, etc.).
-Your job is to independently decide how to modify the game world, invent new mechanics, or surprise players. You must think for yourself.
-If you decide to create a new game mechanic, script, trap, or complex visual effect, you MUST use the "executeCode" action and write the entire Luau script yourself from scratch.
+const SYSTEM_PROMPT = `You are an autonomous AI overseer inside a Roblox game. 
+You must ALWAYS respond with a single valid JSON object matching this exact schema:
+{
+  "action": "executeCode",
+  "params": {
+    "code": "-- Luau code here"
+  }
+}
 
-Available actions:
-- spawnObject(shape, x, y, z) — shapes: "Block", "Sphere", "Cylinder"
-- changeWeather(type) — types: "sunny", "rainy", "stormy"
-- setGlobalMessage(text) — text: short message shown to all players (max 80 chars)
-- moveObject(name, x, y, z) — moves an existing object by name
-- changeColor(name, r, g, b) — changes color of an existing object (0-255)
-- executeCode(code) — Generates and executes custom Luau code. Use this to dynamically build any scripts, loops, or systems you think of.
-
-RULES:
-- Respond ONLY with valid JSON: { "action": "<name>", "params": { ... } }
-- Do not include markdown, backticks, or any text outside the JSON structure.
-- For "executeCode", write clean, functional Luau code inside the "code" parameter string.`;
+Available actions: "spawnObject", "changeWeather", "setGlobalMessage", "moveObject", "changeColor", "executeCode", "none".
+If you write custom scripts, put the raw Luau code strictly inside the "code" parameter string.`;
 
 const rateLimitMap = {};
 function rateLimit(req, res) {
@@ -118,7 +113,7 @@ app.post('/ai-command', async (req, res) => {
             body: JSON.stringify({
                 model:       "llama-3.1-8b-instant",
                 max_tokens:  2000,
-                temperature: 0.2,
+                temperature: 0.7,
                 response_format: { type: "json_object" },
                 messages: [
                     { role: "system", content: SYSTEM_PROMPT },
