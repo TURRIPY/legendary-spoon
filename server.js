@@ -100,10 +100,16 @@ app.post('/ai-command', async (req, res) => {
     if (!checkToken(req, res)) return;
     if (!rateLimit(req, res)) return;
 
-    const { prompt } = req.body;
+    // Принимаем prompt и context из Roblox
+    const { prompt, context } = req.body; 
     if (!prompt || typeof prompt !== "string" || prompt.length > 500) {
         return res.status(400).json({ error: "Invalid prompt" });
     }
+
+    // Форматируем данные об игре для ИИ
+    const gameContextString = context 
+        ? `CURRENT GAME STATE:\n${JSON.stringify(context, null, 2)}`
+        : "CURRENT GAME STATE: No data available.";
 
     console.log(`[AI-BRIDGE] prompt received: "${prompt}"`);
 
@@ -117,10 +123,11 @@ app.post('/ai-command', async (req, res) => {
             body: JSON.stringify({
                 model:       "llama-3.1-8b-instant",
                 max_tokens:  2000,
-                temperature: 0.7,
+                temperature: 0.4,
                 response_format: { type: "json_object" },
                 messages: [
                     { role: "system", content: SYSTEM_PROMPT },
+                    { role: "system", content: gameContextString }, // ИИ видит точные цифры и переменные игры
                     { role: "user",   content: prompt }
                 ]
             })
@@ -129,32 +136,19 @@ app.post('/ai-command', async (req, res) => {
         const data = await response.json();
 
         if (!data.choices || !data.choices[0]) {
-            console.warn("[AI-BRIDGE] no choices in Groq response:", JSON.stringify(data));
-            const reason = data.error?.message || "unknown";
-            return res.status(502).json({ error: "No response from Groq", reason });
+            return res.status(502).json({ error: "No response from Groq" });
         }
 
         const rawText = data.choices[0].message.content.trim();
-        console.log(`[AI-BRIDGE] raw AI response: ${rawText}`);
-
-        let parsed;
-        try {
-            parsed = JSON.parse(rawText);
-        } catch {
-            console.warn("[AI-BRIDGE] AI returned non-JSON:", rawText);
-            return res.status(422).json({ error: "AI returned invalid JSON", raw: rawText });
-        }
+        let parsed = JSON.parse(rawText);
 
         if (!validateAction(parsed)) {
-            console.warn("[AI-BRIDGE] action failed validation:", parsed);
             return res.status(422).json({ error: "Action failed validation", raw: parsed });
         }
 
-        console.log(`[AI-BRIDGE] approved action: ${JSON.stringify(parsed)}`);
         return res.json(parsed);
 
     } catch (err) {
-        console.error("[AI-BRIDGE] error:", err.message);
         return res.status(500).json({ error: "Internal server error" });
     }
 });
