@@ -118,7 +118,8 @@ app.post('/ai-command', async (req, res) => {
             body: JSON.stringify({
                 model:       "llama-3.1-8b-instant",
                 max_tokens:  2000,
-                temperature: 0.85,
+                temperature: 0.2,
+                response_format: { type: "json_object" },
                 messages: [
                     { role: "system", content: SYSTEM_PROMPT },
                     { role: "user",   content: prompt }
