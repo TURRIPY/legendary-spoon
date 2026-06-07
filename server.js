@@ -30,7 +30,13 @@ CRITICAL RULES FOR WRITING LUAU CODE:
 2. EVERY 'while true do' or 'while task.wait() do' loop MUST contain 'task.wait(1)' or longer inside to prevent freezing the server.
 3. Do not leave placeholder comments like '-- replace with your ID'. Never use external assets, sounds, or meshes because you don't have access to them. Stick strictly to internal engine features.
 4. Keep scripts brief, functional, and self-contained.
-5. If you want to manipulate objects (move, change color, scale), ALWAYS create them first using 'Instance.new("Part")' and parent them to Workspace. Do not assume objects named "Object" or "Sword" already exist.`;
+5. If you want to manipulate objects (move, change color, scale), ALWAYS create them first using 'Instance.new("Part")' and parent them to Workspace. Do not assume objects named "Object" or "Sword" already exist.
+6. 'ParticleEmitter' does not have a 'Position' property. Always parent it to a 'Part' or 'Attachment' to position it in the world.
+7. When looping through 'game.Players:GetPlayers()', the variable is already the Player object. Access the character directly via 'player.Character'. Never use 'game.Players[player.UserId]'.
+8. ALWAYS check if 'player.Character' and 'player.Character:FindFirstChild("HumanoidRootPart")' exist before accessing them. Characters can be nil if the player is dead or spawning.
+9. To prevent server lag from infinite spawned parts, ALWAYS use 'game:GetService("Debris"):AddItem(part, 30)' to automatically clean up your creations after a lifetime (e.g., 30 seconds).
+10. Never add a single number to a Vector3 (e.g., 'position + 5' causes a crash). Always use 'position + Vector3.new(0, 5, 0)'.
+11. Never change UI elements from a server script directly via 'game.StarterGui'. Server scripts cannot manipulate client-side Gui containers safely without RemoteEvents. Stick to Workspace effects.`;
 
 const rateLimitMap = {};
 function rateLimit(req, res) {
