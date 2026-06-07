@@ -1,0 +1,15 @@
+{
+  "name": "ai-bridge",
+  "version": "1.0.0",
+  "description": "Roblox AI Bridge — whitelist-gated Gemini API for in-game actions",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
